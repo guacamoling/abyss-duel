@@ -187,7 +187,7 @@ td.num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-n
   </section>
 </div>
 
-<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script src="https://unpkg.com/mqtt@5.10.1/dist/mqtt.min.js"></script>
 <script>
 // ---------- Prompt bank (answers ordered roughly most → least common; "/" = aliases) ----------
 const BANK = [
@@ -264,41 +264,41 @@ function push(){if(!S.room)return;S.room.presence({v:1,name:S.name,g:S.g,ready:S
 function newCode(){const L="ABCDEFGHJKMNPQRSTUVWXYZ23456789";let c="";for(let i=0;i<4;i++)c+=L[Math.floor(Math.random()*L.length)];return c}
 function setNet(t){if(S.mode==="duel")$("hdrTag").textContent="Duel "+S.code+" · "+t}
 function inviteLink(){return location.origin+location.pathname+"#"+S.code}
-function makeLink(code,host){
-  const id="abyssduel-"+code.toLowerCase();
-  const L={state:{},opp:null,conn:null,peer:null,fns:[],dead:false,
+const BROKERS=["wss://broker.emqx.io:8084/mqtt","wss://broker.hivemq.com:8884/mqtt","wss://test.mosquitto.org:8081"];
+function connectBroker(i){return new Promise((res,rej)=>{if(i>=BROKERS.length)return rej({type:"network"});
+  let c;try{c=mqtt.connect(BROKERS[i],{clean:true,connectTimeout:7000,reconnectPeriod:2000,keepalive:30})}catch(e){return res(connectBroker(i+1))}
+  const t=setTimeout(()=>{try{c.end(true)}catch(e){}res(connectBroker(i+1))},8000);
+  c.once("connect",()=>{clearTimeout(t);res(c)})})}
+async function makeLink(code){
+  const topic="abyssduel/v1/"+code.toLowerCase();const me=Math.random().toString(36).slice(2,10);
+  const c=await connectBroker(0);
+  const L={state:{},opp:null,oppId:null,seen:0,fns:[],dead:false,
     presence(p){Object.assign(this.state,p);this.send();return Promise.resolve()},
-    send(){if(this.conn&&this.conn.open)try{this.conn.send(this.state)}catch(e){}},
-    peers(){return this.opp?[{peer:"opp",sameTab:false,kind:"viewer",presence:this.opp}]:[]},
+    send(){if(!this.dead&&c.connected)c.publish(topic,JSON.stringify({id:me,s:this.state}))},
+    peers(){return this.opp?[{peer:this.oppId,sameTab:false,kind:"viewer",presence:this.opp}]:[]},
     onPeers(fn){this.fns.push(fn)},
     fire(){for(const f of this.fns)try{f()}catch(e){console.error(e)}},
-    leave(){this.dead=true;clearInterval(this.ka);try{this.peer.destroy()}catch(e){}return Promise.resolve()}};
-  return new Promise((res,rej)=>{
-    let done=false;const ok=()=>{if(!done){done=true;clearTimeout(to);res(L)}};const fail=e=>{if(!done){done=true;clearTimeout(to);L.leave();rej(e)}};
-    const to=setTimeout(()=>fail({type:"timeout"}),15000);
-    const wire=c=>{if(L.conn&&L.conn!==c)try{L.conn.close()}catch(e){}L.conn=c;
-      c.on("open",()=>{if(c!==L.conn)return;L.send();ok();setNet("connected")});
-      c.on("data",d=>{if(c!==L.conn||!d||typeof d!=="object")return;L.opp=Object.freeze({...d});L.fire()});
-      c.on("close",()=>{if(c!==L.conn)return;L.conn=null;L.opp=null;L.fire();if(L.dead)return;setNet("friend disconnected");
-        if(!host)setTimeout(()=>{if(!L.dead&&!L.conn)wire(L.peer.connect(id,{reliable:true}))},2000)});
-      c.on("error",()=>{})};
-    const peer=host?new Peer(id):new Peer();L.peer=peer;
-    peer.on("open",()=>{if(host){peer.on("connection",c=>wire(c));ok();setNet("waiting for friend")}else wire(peer.connect(id,{reliable:true}))});
-    peer.on("disconnected",()=>{if(!L.dead)try{peer.reconnect()}catch(e){}});
-    peer.on("error",e=>{if(!done)fail(e);else if(e.type==="peer-unavailable"&&!host&&!L.dead){setNet("reconnecting…");setTimeout(()=>{if(!L.dead&&!L.conn)wire(peer.connect(id,{reliable:true}))},3000)}});
-    L.ka=setInterval(()=>L.send(),3000);
-  });
+    leave(){this.dead=true;clearInterval(this.ka);try{c.publish(topic,JSON.stringify({id:me,bye:1}))}catch(e){}setTimeout(()=>{try{c.end(true)}catch(e){}},300);return Promise.resolve()}};
+  c.subscribe(topic);
+  c.on("message",(t,buf)=>{if(L.dead)return;let m;try{m=JSON.parse(buf.toString())}catch(e){return}
+    if(!m||typeof m.id!=="string"||m.id===me)return;
+    if(L.oppId&&m.id!==L.oppId&&Date.now()-L.seen<10000)return; // a third person: ignore
+    if(m.bye){if(m.id===L.oppId){L.opp=null;L.oppId=null;L.fire();setNet("friend left")}return}
+    if(!m.s||typeof m.s!=="object")return;
+    const isNew=!L.opp;L.oppId=m.id;L.seen=Date.now();L.opp=Object.freeze({...m.s});if(isNew){setNet("connected");L.send()}L.fire()});
+  c.on("reconnect",()=>setNet("reconnecting…"));
+  c.on("connect",()=>{setNet(L.opp?"connected":"waiting for friend");L.send()});
+  L.ka=setInterval(()=>{L.send();if(L.opp&&Date.now()-L.seen>12000){L.opp=null;L.oppId=null;L.fire();setNet("friend disconnected")}},2500);
+  return L;
 }
-async function enterRoom(code,host,tries=0){
-  if(typeof Peer==="undefined"){$("roomNote").textContent="Couldn't load the connection library. Check your internet and reload.";return}
-  S.name=myName();$("roomNote").textContent=host?"Opening a duel…":"Connecting to your friend…";
-  try{S.room=await makeLink(code,host)}catch(e){
-    if(host&&e&&e.type==="unavailable-id"&&tries<3)return enterRoom(newCode(),true,tries+1);
-    $("roomNote").textContent=!host&&e&&(e.type==="peer-unavailable"||e.type==="timeout")?"No open duel with that code. Check the code, and make sure your friend is still on the duel screen.":"Couldn't connect ("+(e&&e.type||"error")+"). Try again in a moment.";return}
+async function enterRoom(code,host){
+  if(typeof mqtt==="undefined"){$("roomNote").textContent="Couldn't load the connection library. Check your internet and reload.";return}
+  S.name=myName();$("roomNote").textContent="Connecting…";
+  try{S.room=await makeLink(code)}catch(e){$("roomNote").textContent="Couldn't reach the game server. Check your internet and try again.";return}
   $("roomNote").textContent="";S.code=code;S.mode="duel";S.g=0;S.ready=false;S.ans=[];
   S.room.onPeers(onPeers);
-  push();S.phase="room";$("roomCode").textContent=code;setNet(host?"waiting for friend":"connected");
-  $("roomHelp").textContent=host?"Send your friend this link: "+inviteLink()+" — or have them open the site and enter the code.":"You're in. Press ready when you are.";
+  push();S.phase="room";$("roomCode").textContent=code;setNet("waiting for friend");
+  $("roomHelp").textContent=host?"Send your friend this link: "+inviteLink()+" — or have them open the site and enter the code.":"Joined duel "+code+". If your friend doesn't show up in a few seconds, double-check the code.";
   show("scrRoom");renderRoom();
 }
 $("btnCreate").onclick=()=>enterRoom(newCode(),true);
