@@ -248,7 +248,7 @@ function pickPrompts(seedStr){const r=rng(hash(seedStr));const idx=DATA.map((_,i
 
 // ---------- state ----------
 const $=id=>document.getElementById(id);
-const S={oa:[],mode:null,name:"",code:"",room:null,roomApi:null,g:0,ready:false,prompts:[],r:0,ans:[],phase:"lobby",tEnd:0,tick:null,revealT:null,waitSince:0};
+const S={ok:-1,okAt:0,oa:[],mode:null,name:"",code:"",room:null,roomApi:null,g:0,ready:false,prompts:[],r:0,ans:[],phase:"lobby",tEnd:0,tick:null,revealT:null,waitSince:0};
 try{$("inName").value=localStorage.getItem("abyss.name")||""}catch(e){}
 
 function show(scr){for(const s of ["scrLobby","scrRoom","scrGame"])$(s).hidden=s!==scr}
@@ -258,7 +258,7 @@ function myName(){const n=$("inName").value.trim().slice(0,20)||"Diver";try{loca
 function opp(){if(S.mode!=="duel"||!S.room)return null;const ps=S.room.peers().filter(p=>!p.sameTab&&p.kind==="viewer"&&p.presence&&p.presence.v===1).slice().sort((a,b)=>a.peer<b.peer?-1:1);return ps[0]||null}
 function oppAns(r){const o=opp();if(!o)return undefined;const p=o.presence;if(p.g!==S.g||!Array.isArray(p.ans))return undefined;const a=p.ans[r];if(!a||typeof a!=="object")return undefined;return{i:Number.isInteger(a.i)?a.i:-1,t:String(a.t||"").slice(0,40)}}
 function oppName(){const o=opp();return o?String(o.presence.name||"Friend").slice(0,20):"Friend"}
-function push(){if(!S.room)return;S.room.presence({v:1,name:S.name,g:S.g,ready:S.ready,ans:S.ans.map(a=>({i:a.i,t:a.t.slice(0,40)}))}).catch(()=>{})}
+function push(){if(!S.room)return;S.room.presence({v:1,name:S.name,g:S.g,ready:S.ready,ok:S.ok,ans:S.ans.map(a=>({i:a.i,t:a.t.slice(0,40)}))}).catch(()=>{})}
 
 // ---------- lobby ----------
 function newCode(){const L="ABCDEFGHJKMNPQRSTUVWXYZ23456789";let c="";for(let i=0;i<4;i++)c+=L[Math.floor(Math.random()*L.length)];return c}
@@ -317,14 +317,14 @@ function renderRoom(){
   if(o)add(oppName(),"var(--friend)",o.presence.ready&&o.presence.g>=S.g?"Ready":"Not ready");else add("Waiting for your friend…","var(--line)","—");
   $("btnReady").textContent=S.ready?"Waiting for friend…":"I'm ready";$("btnReady").disabled=S.ready;
 }
-$("btnReady").onclick=()=>{const o=opp();const og=o&&Number.isInteger(o.presence.g)?o.presence.g:0;S.g=Math.max(S.g+1,og);S.ready=true;S.ans=[];push();renderRoom();maybeStart()};
+$("btnReady").onclick=()=>{const o=opp();const og=o&&Number.isInteger(o.presence.g)?o.presence.g:0;S.g=Math.max(S.g+1,og);S.ready=true;S.ans=[];S.ok=-1;push();renderRoom();maybeStart()};
 
-function onPeers(){if(S.phase==="room")renderRoom();if(S.phase==="final")renderFinalNote();maybeStart();if(S.phase==="wait")checkWait();if(S.phase==="play")renderOppStatus();renderLanes()}
+function onPeers(){if(S.phase==="room")renderRoom();if(S.phase==="final")renderFinalNote();maybeStart();if(S.phase==="wait")checkWait();if(S.phase==="reveal")checkOk();if(S.phase==="play")renderOppStatus();renderLanes()}
 function maybeStart(){if(S.mode!=="duel"||!S.ready)return;if(S.phase!=="room"&&S.phase!=="final")return;const o=opp();if(!o||!o.presence.ready||o.presence.g!==S.g)return;startGame(pickPrompts(S.code+":"+S.g))}
 
 // ---------- game ----------
 function clearTimers(){clearInterval(S.tick);clearTimeout(S.revealT);S.tick=null;S.revealT=null}
-function startGame(prompts){clearTimers();S.prompts=prompts;S.r=0;S.ans=[];S.oa=[];if(S.mode==="duel")push();
+function startGame(prompts){clearTimers();S.prompts=prompts;S.r=0;S.ans=[];S.oa=[];S.ok=-1;if(S.mode==="duel")push();
   $("laneFriend").hidden=S.mode!=="duel";$("laneYouName").textContent=S.name;$("laneFriendName").textContent=oppName();
   show("scrGame");startRound()}
 function startRound(){S.phase="play";const pi=S.prompts[S.r];$("roundTag").textContent=`Round ${S.r+1} of ${ROUNDS}`;$("promptText").textContent=DATA[pi].q;
@@ -352,9 +352,14 @@ function reveal(){S.phase="reveal";const pi=S.prompts[S.r];const a=S.ans[S.r];co
   if(o)box.append(ansCard("friend",oppName(),o,score(pi,o.i,a.i)));
   box.style.gridTemplateColumns=o?"":"1fr";
   const L=DATA[pi].list;$("revealHint").textContent=`Most common: ${L.slice(0,3).map(x=>x[0]).join(", ")}. Rarest on the list: ${L[L.length-1][0]}.`;
-  $("btnNext").textContent=S.r+1<ROUNDS?"Next prompt":"See results";showCard("revealCard");renderLanes();
-  const end=Date.now()+REVEAL_MS;clearInterval(S.tick);S.tick=setInterval(()=>{const s=Math.ceil((end-Date.now())/1000);$("nextIn").textContent=s>0?`Continuing in ${s}s`:"";if(s<=0)next()},250)}
-$("btnNext").onclick=next;
+  $("btnNext").textContent="Okay";$("btnNext").disabled=false;$("nextIn").textContent=S.mode==="duel"?`The next ${S.r+1<ROUNDS?"prompt":"screen"} starts when you both click Okay.`:"";showCard("revealCard");renderLanes();clearInterval(S.tick)}
+function oppOk(){const o=opp();if(!o||o.presence.g!==S.g||!Number.isInteger(o.presence.ok))return -1;return o.presence.ok}
+function checkOk(){if(S.phase!=="reveal"||S.ok<S.r)return;
+  if(oppOk()>=S.r){next();return}
+  const o=opp();if(!o&&Date.now()-S.okAt>15000){S.mode="solo";$("laneFriend").hidden=true;next();return}
+  $("nextIn").textContent=o?`Waiting for ${oppName()} to click Okay…`:"Your friend seems disconnected. Waiting a few seconds…"}
+$("btnNext").onclick=()=>{if(S.phase!=="reveal")return;if(S.mode!=="duel"){next();return}
+  S.ok=S.r;S.okAt=Date.now();push();$("btnNext").disabled=true;$("btnNext").textContent="Okay ✓";checkOk();clearInterval(S.tick);S.tick=setInterval(checkOk,1000)};
 function next(){if(S.phase!=="reveal")return;clearInterval(S.tick);S.r++;if(S.r<ROUNDS)startRound();else finish()}
 
 function finish(){S.phase="final";S.ready=false;if(S.mode==="duel")push();showCard("finalCard");renderLanes();
@@ -369,7 +374,7 @@ function finish(){S.phase="final";S.ready=false;if(S.mode==="duel")push();showCa
   $("finalHead").textContent=duel?(mm>tm?`You win, ${mm}m to ${tm}m.`:mm<tm?`${oppName()} wins, ${tm}m to ${mm}m.`:`Dead heat at ${mm}m.`):`You reached ${mm}m.`;
   $("btnAgain").textContent=duel?"Rematch":"Dive again";renderFinalNote()}
 function renderFinalNote(){if(S.mode!=="duel"){$("againNote").textContent="";return}const o=opp();$("againNote").textContent=!o?"Your friend has left the room.":(o.presence.ready&&o.presence.g>S.g)?`${oppName()} wants a rematch.`:S.ready?`Waiting for ${oppName()} to press Rematch.`:""}
-$("btnAgain").onclick=()=>{if(S.mode==="duel"){const o=opp();const og=o&&Number.isInteger(o.presence.g)?o.presence.g:0;S.g=Math.max(S.g+1,og);S.ready=true;S.ans=[];push();$("btnAgain").disabled=true;renderFinalNote();setTimeout(()=>$("btnAgain").disabled=false,800);maybeStart()}else startGame(pickPrompts("solo"+Math.random()))};
+$("btnAgain").onclick=()=>{if(S.mode==="duel"){const o=opp();const og=o&&Number.isInteger(o.presence.g)?o.presence.g:0;S.g=Math.max(S.g+1,og);S.ready=true;S.ans=[];S.ok=-1;push();$("btnAgain").disabled=true;renderFinalNote();setTimeout(()=>$("btnAgain").disabled=false,800);maybeStart()}else startGame(pickPrompts("solo"+Math.random()))};
 </script>
 
 </body>
