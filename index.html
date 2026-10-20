@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Abyss Duel</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,800&family=Atkinson+Hyperlegible:wght@400;700&family=DM+Mono:wght@400;500&display=swap">
+<style>
+*,*::before,*::after{box-sizing:border-box}
+[hidden]{display:none!important}
+body{margin:0}
+:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+/* Layout: one centered column — depth lanes on top, the prompt "porthole" below, result log underneath. Single deep-ocean look by design. */
+:root{
+  --abyss:#06121f; --water:#0b2236; --panel:#0f2c45; --line:#1d4566;
+  --ink:#e6f4ff; --muted:#8fb3cc;
+  --you:#5fe3d7; --friend:#ffa08a; --warn:#ffd36b; --bad:#ff6b7d;
+  --f-display:"Bricolage Grotesque",ui-sans-serif,system-ui,sans-serif;
+  --f-body:"Atkinson Hyperlegible",ui-sans-serif,system-ui,sans-serif;
+  --f-mono:"DM Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+html,body{min-height:100%}
+body{background:radial-gradient(120% 70% at 50% -10%,var(--water),var(--abyss) 70%) fixed,var(--abyss);color:var(--ink);font-family:var(--f-body);font-size:16px;line-height:1.5}
+.wrap{max-width:720px;margin:0 auto;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:28px 48px;display:flex;flex-direction:column;gap:22px}
+header{display:flex;align-items:baseline;justify-content:space-between;gap:12px;flex-wrap:wrap}
+h1{font-family:var(--f-display);font-weight:800;font-size:clamp(28px,6vw,40px);letter-spacing:-.02em;margin:0;line-height:1}
+h1 span{color:var(--you)}
+.tag{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h2{font-family:var(--f-display);font-weight:800;font-size:clamp(22px,4.5vw,30px);margin:0;letter-spacing:-.01em;text-wrap:balance;line-height:1.15}
+p{margin:0}
+.muted{color:var(--muted)}
+.card{background:color-mix(in srgb,var(--panel) 85%,transparent);border:1px solid var(--line);border-radius:14px;padding:22px;display:flex;flex-direction:column;gap:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.row > *{min-width:0}
+label{font-family:var(--f-mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+input{font:inherit;font-size:18px;background:var(--abyss);color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:12px 14px;width:100%;outline:none}
+input:focus-visible{border-color:var(--you);box-shadow:0 0 0 3px color-mix(in srgb,var(--you) 25%,transparent)}
+button{font:inherit;font-weight:700;border-radius:10px;padding:12px 18px;border:1px solid var(--line);background:var(--water);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--you);outline-offset:2px}
+button.primary{background:var(--you);color:var(--abyss);border-color:var(--you)}
+button.primary:hover{filter:brightness(1.08)}
+button:disabled{opacity:.45;cursor:not-allowed}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+@media (max-width:560px){.grid2{grid-template-columns:1fr}}
+.code{font-family:var(--f-mono);font-size:30px;letter-spacing:.25em;color:var(--you)}
+/* depth lanes */
+.lanes{display:flex;flex-direction:column;gap:10px}
+.lane{display:grid;grid-template-columns:84px 1fr 76px;gap:10px;align-items:center}
+.lane .who{font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bar{height:12px;border-radius:6px;background:var(--abyss);border:1px solid var(--line);position:relative;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;width:0;border-radius:6px;transition:width .8s cubic-bezier(.2,.8,.2,1)}
+.lane.you i{background:linear-gradient(90deg,color-mix(in srgb,var(--you) 40%,transparent),var(--you))}
+.lane.friend i{background:linear-gradient(90deg,color-mix(in srgb,var(--friend) 40%,transparent),var(--friend))}
+.depth{font-family:var(--f-mono);font-variant-numeric:tabular-nums;text-align:right}
+.lane.you .depth{color:var(--you)} .lane.friend .depth{color:var(--friend)}
+.scale{display:grid;grid-template-columns:84px 1fr 76px;gap:10px;font-family:var(--f-mono);font-size:11px;color:var(--muted)}
+.scale div{display:flex;justify-content:space-between}
+/* prompt */
+.roundline{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.timer{height:6px;border-radius:3px;background:var(--abyss);overflow:hidden}
+.timer i{display:block;height:100%;background:var(--you);width:100%}
+.timer.low i{background:var(--warn)}
+.msg{min-height:1.5em;font-size:15px}
+.msg.bad{color:var(--bad)}
+.shake{animation:shake .3s}
+@keyframes shake{25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+.answers{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media (max-width:480px){.answers{grid-template-columns:1fr}}
+.ans{border:1px solid var(--line);border-radius:12px;padding:14px;display:flex;flex-direction:column;gap:4px;background:var(--abyss)}
+.ans.you{border-color:color-mix(in srgb,var(--you) 50%,var(--line))}
+.ans.friend{border-color:color-mix(in srgb,var(--friend) 50%,var(--line))}
+.ans .txt{font-family:var(--f-display);font-weight:800;font-size:22px;overflow-wrap:anywhere}
+.tier{font-family:var(--f-mono);font-size:12px;letter-spacing:.06em;text-transform:uppercase}
+.t-trench{color:#c9a6ff} .t-abyss{color:var(--you)} .t-twilight{color:#7fb6ff} .t-shallows{color:var(--muted)} .t-surface{color:var(--muted)} .t-none{color:var(--bad)} .t-clash{color:var(--warn)}
+.pts{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.hint{font-size:14px;color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:15px}
+td,th{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font-family:var(--f-mono);font-size:11px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);font-weight:500}
+td.num{font-family:var(--f-mono);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.tablewrap{overflow-x:auto}
+.players{display:flex;flex-direction:column;gap:8px}
+.pl{display:flex;justify-content:space-between;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--abyss)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:8px;vertical-align:middle}
+.rules{font-size:14px;color:var(--muted);display:grid;grid-template-columns:auto 1fr auto;gap:4px 14px}
+.rules .pts{text-align:right}
+@media (prefers-reduced-motion:reduce){.bar i{transition:none}.shake{animation:none}}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>Abyss <span>Duel</span></h1>
+    <span class="tag" id="hdrTag">Rare answers go deeper</span>
+  </header>
+
+  <!-- LOBBY -->
+  <section id="scrLobby" class="card">
+    <h2>The obvious answer loses.</h2>
+    <p class="muted">Seven prompts, 20 seconds each. Name something that fits, but the rarer it is, the deeper you dive. In a duel, if you and your friend give the same answer, you each get half.</p>
+    <div>
+      <label for="inName">Your name</label>
+      <input id="inName" maxlength="20" placeholder="e.g. Grace" autocomplete="off">
+    </div>
+    <div class="grid2">
+      <div class="card" style="padding:16px;gap:12px">
+        <strong>Start a duel</strong>
+        <p class="hint">Get a code, send it to your friend.</p>
+        <button class="primary" id="btnCreate">Create duel</button>
+      </div>
+      <div class="card" style="padding:16px;gap:12px">
+        <strong>Join a duel</strong>
+        <input id="inCode" maxlength="4" placeholder="CODE" autocomplete="off" style="text-transform:uppercase;font-family:var(--f-mono);letter-spacing:.2em">
+        <button id="btnJoin">Join</button>
+      </div>
+    </div>
+    <div class="row"><button id="btnSolo">Practice solo</button><span class="hint" id="roomNote"></span></div>
+    <div class="rules">
+      <span class="tier t-trench">Trench find</span><span>The single rarest answer on the list</span><span class="pts">100 · 400m</span>
+      <span class="tier t-abyss">Abyss</span><span>Rarest quarter</span><span class="pts">75 · 300m</span>
+      <span class="tier t-twilight">Twilight</span><span>Uncommon</span><span class="pts">50 · 200m</span>
+      <span class="tier t-shallows">Shallows</span><span>Fairly common</span><span class="pts">25 · 100m</span>
+      <span class="tier t-surface">Surface</span><span>What everyone says</span><span class="pts">10 · 40m</span>
+    </div>
+  </section>
+
+  <!-- ROOM -->
+  <section id="scrRoom" class="card" hidden>
+    <div class="row" style="justify-content:space-between">
+      <div><label>Duel code</label><div class="code" id="roomCode">----</div></div>
+      <button id="btnCopy">Copy invite link</button>
+    </div>
+    <p class="muted" id="roomHelp" style="overflow-wrap:anywhere"></p>
+    <div class="players" id="playerList"></div>
+    <div class="row">
+      <button class="primary" id="btnReady">I'm ready</button>
+      <button id="btnLeave">Leave</button>
+    </div>
+  </section>
+
+  <!-- GAME -->
+  <section id="scrGame" hidden style="display:flex;flex-direction:column;gap:22px">
+    <div class="lanes" aria-label="Depth">
+      <div class="lane you"><span class="who" id="laneYouName">You</span><div class="bar"><i id="barYou"></i></div><span class="depth" id="depYou">0m</span></div>
+      <div class="lane friend" id="laneFriend"><span class="who" id="laneFriendName">Friend</span><div class="bar"><i id="barFriend"></i></div><span class="depth" id="depFriend">0m</span></div>
+      <div class="scale"><span></span><div><span>0</span><span>700</span><span>1400</span><span>2100</span><span>2800m</span></div><span></span></div>
+    </div>
+
+    <div class="card" id="playCard">
+      <div class="roundline"><span class="tag" id="roundTag">Round 1 of 7</span><span class="tag pts" id="clock">20s</span></div>
+      <h2 id="promptText">…</h2>
+      <form id="ansForm" class="row" style="flex-wrap:nowrap">
+        <input id="inAns" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Type a rare answer" maxlength="40">
+        <button class="primary" type="submit">Dive</button>
+      </form>
+      <div class="timer" id="timerBar"><i id="timerFill"></i></div>
+      <p class="msg" id="playMsg"></p>
+      <p class="hint" id="oppStatus"></p>
+    </div>
+
+    <div class="card" id="waitCard" hidden>
+      <span class="tag" id="waitTag">Round 1 of 7</span>
+      <h2>Waiting for <span id="waitName">your friend</span>…</h2>
+      <p class="muted">You locked in <strong id="waitMine"></strong>. Their answer shows when they lock in too.</p>
+      <div class="row"><button id="btnSkipWait" hidden>Stop waiting and play solo</button></div>
+    </div>
+
+    <div class="card" id="revealCard" hidden>
+      <span class="tag" id="revealTag">Round 1 reveal</span>
+      <h2 id="revealPrompt"></h2>
+      <div class="answers" id="revealAnswers"></div>
+      <p class="hint" id="revealHint"></p>
+      <div class="row"><button class="primary" id="btnNext">Next prompt</button><span class="hint" id="nextIn"></span></div>
+    </div>
+
+    <div class="card" id="finalCard" hidden>
+      <span class="tag">Dive complete</span>
+      <h2 id="finalHead"></h2>
+      <div class="tablewrap"><table id="recap"></table></div>
+      <div class="row"><button class="primary" id="btnAgain">Rematch</button><button id="btnExit">Back to lobby</button></div>
+      <p class="hint" id="againNote"></p>
+    </div>
+  </section>
+</div>
+
+<script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+<script>
+// ---------- Prompt bank (answers ordered roughly most → least common; "/" = aliases) ----------
+const BANK = [
+["Name a fruit","apple,banana,orange,strawberry,grape,mango,pineapple,watermelon,pear,peach,cherry,blueberry,lemon,kiwi/kiwifruit,raspberry,plum,lime,coconut,pomegranate,apricot,grapefruit,papaya,cantaloupe,blackberry,nectarine,fig,passion fruit/passionfruit,guava,lychee/litchi,dragon fruit/pitaya,tangerine,clementine,cranberry,honeydew,date,persimmon,star fruit/carambola,jackfruit,durian,quince,kumquat,gooseberry,mulberry,elderberry,rambutan,mangosteen,loquat,feijoa,pawpaw,longan,soursop/guanabana,cherimoya,tamarillo,yuzu,salak/snake fruit,ugli fruit,medlar,jabuticaba"],
+["Name an animal with four legs","dog,cat,horse,cow,lion,elephant,tiger,bear,pig,sheep,goat,giraffe,zebra,deer,mouse,rabbit,wolf,fox,rhinoceros/rhino,hippopotamus/hippo,cheetah,leopard,donkey,camel,squirrel,raccoon,moose,hamster,panda,koala,crocodile,alligator,turtle,frog,lizard,bison/buffalo,llama,alpaca,hedgehog,skunk,otter,badger,beaver,armadillo,anteater,porcupine,jaguar,hyena,lynx,elk,reindeer/caribou,gazelle,antelope,yak,chinchilla,ferret,iguana,gecko,sloth,cougar/puma/mountain lion,bobcat,meerkat,mongoose,capybara,wombat,opossum/possum,chipmunk,groundhog/woodchuck,aardvark,tapir,okapi,ocelot,wolverine,pangolin,ibex,impala,wildebeest/gnu,quokka,salamander,newt,mole,komodo dragon,caracal,serval,fennec fox,dingo,kudu,marmot,shrew,vole,axolotl,numbat,binturong,saiga"],
+["Name a country in Europe","france,germany,spain,italy,united kingdom/uk/england/britain/great britain,portugal,greece,ireland,netherlands/holland,belgium,switzerland,sweden,norway,poland,austria,denmark,finland,russia,ukraine,iceland,czech republic/czechia,hungary,croatia,romania,turkey,scotland,wales,bulgaria,serbia,slovakia,slovenia,luxembourg,monaco,malta,estonia,latvia,lithuania,belarus,albania,bosnia/bosnia and herzegovina,montenegro,north macedonia/macedonia,moldova,cyprus,andorra,liechtenstein,san marino,vatican city/vatican/holy see,kosovo,georgia,armenia,azerbaijan"],
+["Name a US state","california,texas,florida,new york,ohio,washington,colorado,alaska,hawaii,arizona,nevada,oregon,georgia,illinois,michigan,massachusetts,pennsylvania,virginia,north carolina,tennessee,louisiana,new jersey,utah,kentucky,alabama,south carolina,minnesota,wisconsin,missouri,montana,maine,oklahoma,kansas,indiana,maryland,iowa,mississippi,new mexico,idaho,arkansas,connecticut,vermont,west virginia,nebraska,wyoming,new hampshire,rhode island,north dakota,south dakota,delaware"],
+["Name a vegetable","carrot,broccoli,potato,tomato,lettuce,cucumber,onion,spinach,pea,corn,celery,cabbage,pepper/bell pepper,cauliflower,green bean,zucchini/courgette,mushroom,garlic,asparagus,eggplant/aubergine,kale,sweet potato,beet/beetroot,pumpkin,radish,brussels sprout,squash,artichoke,leek,turnip,parsnip,okra,bok choy/pak choi,arugula/rocket,butternut squash,shallot,chard/swiss chard,watercress,fennel,rutabaga/swede,kohlrabi,endive,jicama,daikon,celeriac,radicchio,collard greens/collards,yam,taro,cassava/yuca,salsify,romanesco,sunchoke/jerusalem artichoke,fiddlehead,burdock,lotus root,chayote,samphire"],
+["Name a sport","soccer/football,basketball,baseball,tennis,golf,hockey/ice hockey,volleyball,swimming,cricket,rugby,american football,boxing,running,badminton,table tennis/ping pong,skiing,surfing,cycling,wrestling,gymnastics,lacrosse,softball,bowling,skateboarding,snowboarding,track and field/athletics,fencing,rowing,archery,handball,water polo,karate,judo,squash,field hockey,diving,curling,polo,sailing,mma/mixed martial arts,climbing/rock climbing,figure skating,triathlon,equestrian,pickleball,ultimate frisbee/ultimate,taekwondo,kayaking,bobsled/bobsleigh,luge,biathlon,netball,darts,snooker,billiards/pool,racquetball,skeleton,kabaddi,hurling,sepak takraw,korfball,jai alai,bandy,sumo,dodgeball,orienteering,underwater hockey"],
+["Name a musical instrument","piano,guitar,drums,violin,flute,trumpet,saxophone,cello,clarinet,bass/bass guitar,harp,ukulele,trombone,harmonica,keyboard,tuba,banjo,french horn/horn,oboe,xylophone,accordion,viola,double bass,tambourine,bagpipes,mandolin,triangle,bassoon,piccolo,organ,synthesizer,recorder,cymbal,bongo,sitar,marimba,glockenspiel,harpsichord,lute,didgeridoo,kazoo,cowbell,steel drum/steelpan,timpani,djembe,theremin,zither,dulcimer,bouzouki,balalaika,shamisen,koto,erhu,oud,tabla,kalimba/thumb piano,ocarina,hurdy gurdy,cajon,euphonium,sousaphone,celesta,contrabassoon,hang drum/handpan,tin whistle,crumhorn"],
+["Name a planet, moon, or dwarf planet in our solar system","earth,mars,jupiter,saturn,venus,mercury,neptune,uranus,pluto,moon/the moon/luna,titan,europa,io,ganymede,callisto,phobos,deimos,enceladus,triton,charon,ceres,eris,mimas,miranda,titania,oberon,rhea,iapetus,dione,tethys,ariel,umbriel,hyperion,phoebe,makemake,haumea,proteus,nereid,amalthea,himalia,janus,epimetheus,pan,nix,hydra,thebe,metis,sedna,dysnomia,hiiaka,namaka"],
+["Name a dog breed","labrador/lab/labrador retriever,golden retriever,german shepherd,poodle,bulldog,beagle,chihuahua,husky/siberian husky,pug,dachshund,rottweiler,boxer,corgi,border collie,yorkshire terrier/yorkie,shih tzu,great dane,doberman,pomeranian,dalmatian,french bulldog,cocker spaniel,maltese,pitbull/pit bull,australian shepherd,bernese mountain dog,greyhound,saint bernard,bichon frise,schnauzer,akita,shiba inu,mastiff,newfoundland,jack russell terrier,cavalier king charles spaniel,samoyed,basset hound,bloodhound,weimaraner,whippet,collie,malamute/alaskan malamute,chow chow,boston terrier,shetland sheepdog/sheltie,vizsla,papillon,irish setter,bull terrier,havanese,rhodesian ridgeback,basenji,afghan hound,borzoi,saluki,komondor,puli,xoloitzcuintli/xolo,shar pei,lhasa apso,leonberger,keeshond,affenpinscher,otterhound,lagotto romagnolo,azawakh,mudi,catahoula"],
+["Name a bird","eagle,robin,parrot,penguin,owl,pigeon,crow,sparrow,flamingo,hawk,chicken,duck,swan,ostrich,peacock,blue jay,cardinal,hummingbird,seagull/gull,pelican,woodpecker,falcon,turkey,goose,toucan,raven,vulture,emu,canary,dove,stork,heron,crane,magpie,kingfisher,finch,starling,bald eagle,albatross,puffin,kiwi,parakeet/budgie,cockatoo,macaw,condor,osprey,warbler,wren,swallow,nightingale,lark,oriole,quail,pheasant,egret,ibis,cormorant,roadrunner,kookaburra,cassowary,hoopoe,shoebill,hornbill,lyrebird,kakapo,secretary bird,nuthatch,kestrel,bittern,plover,sandpiper,tanager,grebe,loon,dodo"],
+["Name a part of the human body","head,arm,leg,hand,foot,eye,nose,mouth,ear,heart,finger,toe,knee,elbow,shoulder,brain,stomach,neck,lung,liver,back,hair,chest,tongue,teeth/tooth,skin,hip,wrist,ankle,lip,chin,thumb,kidney,cheek,forehead,eyebrow,belly button/navel,thigh,calf,heel,spine,jaw,eyelash,palm,knuckle,throat,bladder,intestine,skull,rib,pancreas,spleen,gallbladder,appendix,armpit,earlobe,nostril,eyelid,uvula,tonsil,cornea,retina,thyroid,diaphragm,esophagus,larynx,pituitary gland,cochlea,clavicle,sternum,philtrum,septum,patella,achilles tendon,coccyx,hypothalamus"],
+["Name a capital city","paris,london,tokyo,washington/washington dc,rome,berlin,madrid,beijing,moscow,ottawa,canberra,cairo,athens,dublin,lisbon,amsterdam,brussels,vienna,stockholm,oslo,copenhagen,helsinki,mexico city,buenos aires,new delhi/delhi,seoul,bangkok,warsaw,prague,budapest,ankara,nairobi,lima,santiago,bogota,brasilia,wellington,reykjavik,havana,manila,jakarta,hanoi,kabul,tehran,baghdad,riyadh,doha,abu dhabi,islamabad,dhaka,kathmandu,kyiv/kiev,bern,bucharest,sofia,belgrade,zagreb,ljubljana,bratislava,tallinn,riga,vilnius,minsk,tbilisi,yerevan,baku,astana,tashkent,ulaanbaatar,kampala,addis ababa,accra,dakar,rabat,tunis,algiers,windhoek,lusaka,harare,montevideo,asuncion,la paz,quito,caracas,canberra,suva,thimphu,vientiane,naypyidaw,dushanbe,bishkek,ashgabat,ouagadougou,nouakchott,antananarivo,gaborone,maseru,mbabane,ngerulmud,funafuti,tarawa,majuro,palikir"],
+["Name a chemical element","oxygen,hydrogen,carbon,gold,iron,helium,nitrogen,silver,copper,sodium,calcium,neon,lead,aluminum/aluminium,uranium,chlorine,potassium,zinc,mercury,platinum,magnesium,sulfur/sulphur,lithium,silicon,titanium,nickel,tin,plutonium,iodine,phosphorus,fluorine,argon,cobalt,chromium,radon,radium,boron,beryllium,manganese,tungsten,krypton,xenon,arsenic,barium,bromine,cesium/caesium,strontium,cadmium,palladium,vanadium,bismuth,selenium,gallium,germanium,antimony,tellurium,thorium,francium,polonium,iridium,osmium,rhodium,ruthenium,zirconium,niobium,molybdenum,technetium,indium,lanthanum,cerium,neodymium,europium,gadolinium,hafnium,tantalum,rhenium,thallium,astatine,actinium,protactinium,americium,curium,einsteinium,fermium,nobelium,lawrencium,rutherfordium,dubnium,seaborgium,bohrium,hassium,meitnerium,darmstadtium,roentgenium,copernicium,nihonium,flerovium,moscovium,livermorium,tennessine,oganesson,scandium,yttrium,praseodymium,promethium,samarium,terbium,dysprosium,holmium,erbium,thulium,ytterbium,lutetium,neptunium,berkelium,californium,mendelevium,rubidium"],
+["Name a type of tree","oak,maple,pine,palm,birch,willow,apple,cherry,redwood,spruce,elm,cedar,fir,ash,walnut,cypress,sequoia,aspen,beech,poplar,dogwood,magnolia,eucalyptus,sycamore,hickory,baobab,olive,chestnut,juniper,banyan,hemlock,larch,alder,linden/lime,yew,mahogany,teak,bamboo,acacia,cottonwood,hawthorn,holly,rowan/mountain ash,ginkgo,sassafras,mangrove,jacaranda,catalpa,hornbeam,tamarack,buckeye,mesquite,locust,tupelo,sweetgum,bonsai,kapok,dragon tree,joshua tree,monkey puzzle,wollemi pine,bristlecone pine"],
+["Name a flower","rose,tulip,daisy,sunflower,lily,orchid,daffodil,carnation,lavender,lilac,dandelion,violet,poppy,iris,marigold,hibiscus,peony,chrysanthemum,lotus,jasmine,hydrangea,magnolia,pansy,petunia,begonia,geranium,gardenia,azalea,camellia,zinnia,dahlia,gerbera,snapdragon,cherry blossom,forget me not,bluebell,buttercup,crocus,hyacinth,lupine,morning glory,primrose,foxglove,freesia,gladiolus,amaryllis,anemone,aster,cosmos,edelweiss,honeysuckle,larkspur,wisteria,bougainvillea,calla lily,ranunculus,protea,bird of paradise,anthurium,heather,snowdrop,sweet pea,verbena,yarrow,columbine,hollyhock,clematis,cornflower,delphinium,lisianthus,nasturtium,plumeria/frangipani,strelitzia,trillium,hellebore,rafflesia,corpse flower"],
+["Name a cheese","cheddar,mozzarella,parmesan/parmigiano reggiano,swiss,brie,gouda,feta,american,cream cheese,blue cheese,provolone,ricotta,camembert,goat cheese/chevre,monterey jack,colby,pepper jack,gruyere,cottage cheese,manchego,halloumi,mascarpone,gorgonzola,stilton,emmental,roquefort,havarti,pecorino,asiago,paneer,munster,burrata,edam,jarlsberg,fontina,queso fresco,limburger,raclette,comte,taleggio,wensleydale,boursin,red leicester,double gloucester,leerdammer,cotija,oaxaca,reblochon,epoisses,manouri,caciocavallo,scamorza,stracchino,tomme,appenzeller,lancashire,caerphilly,cheshire,port salut,brunost,casu marzu,mimolette,vacherin,mizithra,kefalotyri"],
+["Name a board game","monopoly,chess,scrabble,checkers/draughts,clue/cluedo,risk,sorry,the game of life/game of life/life,candy land,trivial pursuit,catan/settlers of catan,battleship,connect four,backgammon,operation,guess who,mouse trap,ticket to ride,pandemic,go,chutes and ladders/snakes and ladders,parcheesi/ludo,stratego,mancala,othello/reversi,yahtzee,pictionary,boggle,codenames,carcassonne,cranium,trouble,hungry hungry hippos,battleship,dominoes,mahjong,azul,splendor,dixit,wingspan,scattergories,taboo,jenga,twister,risk legacy,mastermind,chinese checkers,cribbage,kingdomino,agricola,terraforming mars,gloomhaven,twilight imperium,power grid,puerto rico,dominion,small world,king of tokyo,sushi go,root,everdell,brass,tigris and euphrates,hive,blokus,acquire,diplomacy,shogi,xiangqi,hnefatafl,senet,the royal game of ur/royal game of ur,nine mens morris,crokinole,go fish"],
+["Name a Greek god or goddess","zeus,poseidon,hades,athena,aphrodite,apollo,ares,hera,artemis,hermes,dionysus,demeter,hephaestus,persephone,hestia,eros,nike,gaia,cronus/kronos,nemesis,hecate,pan,helios,selene,eos,iris,hypnos,thanatos,uranus,rhea,tyche,morpheus,hebe,nyx,asclepius,atlas,prometheus,themis,mnemosyne,oceanus,tethys,hyperion,triton,eris,harmonia,deimos,phobos,boreas,zephyrus,aether,chaos,erebus,tartarus,leto,metis,styx,priapus,aeolus,nereus,proteus,ananke,chronos,hemera,eileithyia,enyo,hymen"],
+["Name a language","english,spanish,french,german,chinese/mandarin,japanese,italian,russian,portuguese,arabic,korean,hindi,dutch,greek,swedish,latin,turkish,polish,hebrew,vietnamese,cantonese,thai,norwegian,danish,finnish,irish/gaelic/irish gaelic,urdu,bengali/bangla,tagalog/filipino,indonesian,swahili,ukrainian,czech,hungarian,romanian,persian/farsi,punjabi,welsh,icelandic,malay,tamil,telugu,esperanto,sign language/asl,catalan,croatian,serbian,bulgarian,slovak,afrikaans,zulu,yoruba,amharic,basque,estonian,latvian,lithuanian,albanian,armenian,georgian,mongolian,nepali,khmer,lao,burmese,maori,hawaiian,navajo,cherokee,quechua,guarani,yiddish,sanskrit,tibetan,xhosa,igbo,hausa,somali,kurdish,pashto,uzbek,kazakh,maltese,luxembourgish,breton,cornish,manx,faroese,sami,ainu,klingon"],
+["Name a type of pasta","spaghetti,macaroni,penne,fettuccine,lasagna/lasagne,ravioli,linguine,rigatoni,tortellini,fusilli,farfalle/bow tie,rotini,angel hair/capellini,ziti,orzo,gnocchi,tagliatelle,shells/conchiglie,manicotti,cannelloni,orecchiette,pappardelle,bucatini,vermicelli,ditalini,cavatappi,gemelli,campanelle,radiatori,stelline,cavatelli,paccheri,trofie,tortiglioni,orecchiette,agnolotti,mafaldine,casarecce,strozzapreti,bigoli,pici,malloreddus,lumache,anelli,acini di pepe,fregola,sedanini,mezzelune,cappelletti,culurgiones,corzetti,lorighittas,scialatielli"],
+["Name a fish","salmon,tuna,goldfish,shark,cod,trout,catfish,clownfish,bass,swordfish,tilapia,halibut,mackerel,sardine,anchovy,piranha,carp,guppy,betta,eel,stingray,herring,snapper,mahi mahi,flounder,perch,pike,barracuda,marlin,koi,angelfish,haddock,sole,sturgeon,grouper,pufferfish/blowfish,seahorse,manta ray,sea bass,walleye,minnow,tetra,goby,wrasse,anglerfish,lionfish,sunfish/mola,barramundi,pollock,whiting,monkfish,carp,dory,turbot,lamprey,hagfish,coelacanth,arapaima,oarfish,blobfish,mudskipper,lungfish,bichir,wahoo,cobia,tarpon,bonefish,snakehead,gar,paddlefish,remora,triggerfish,parrotfish,tang,moray"],
+["Name a herb or spice","salt,pepper/black pepper,basil,oregano,cinnamon,garlic,parsley,thyme,rosemary,paprika,cumin,ginger,mint,turmeric,nutmeg,cilantro/coriander,chili powder,dill,sage,cayenne,bay leaf,clove,vanilla,chives,curry powder,saffron,cardamom,allspice,fennel,mustard seed,tarragon,marjoram,anise,star anise,lemongrass,sumac,fenugreek,lavender,caraway,sesame,juniper,za'atar/zaatar,mace,asafoetida,galangal,szechuan pepper/sichuan pepper,lovage,chervil,sorrel,epazote,borage,savory,annatto/achiote,grains of paradise,nigella,ajwain,amchur,long pepper,mahleb,sassafras,shiso,hyssop,angelica"],
+["Name a bone in the human body","skull,femur,rib,spine,tibia,humerus,pelvis,fibula,radius,ulna,jaw/mandible,collarbone/clavicle,kneecap/patella,sternum,shoulder blade/scapula,vertebra,tailbone/coccyx,hip bone,phalanges/phalanx,metacarpal,metatarsal,carpal,tarsal,cranium,sacrum,ilium,ischium,pubis,maxilla,stapes,incus,malleus,hyoid,zygomatic,occipital,parietal,temporal,frontal,sphenoid,ethmoid,nasal bone,vomer,lacrimal,palatine,calcaneus,talus,navicular,cuboid,cuneiform,scaphoid,lunate,triquetrum,pisiform,trapezium,trapezoid,capitate,hamate,atlas,axis"],
+["Name a style of dance","ballet,hip hop,salsa,tango,jazz,tap,ballroom,waltz,swing,breakdancing/breaking,contemporary,square dance,line dancing,belly dance,flamenco,disco,irish dance,cha cha,samba,foxtrot,rumba,polka,bachata,merengue,twerking,the robot,moonwalk,lindy hop,charleston,jive,macarena,zumba,hula,krumping,voguing,pole dance,quickstep,paso doble,kathak,bharatanatyam,bollywood,kizomba,zouk,capoeira,cancan,clogging,mambo,lambada,cumbia,haka,popping,locking,tutting,shuffle,electric slide,bolero,fandango,tarantella,mazurka,morris dance,butoh,kabuki,odissi,sardana,hora,sirtaki,jota,schuhplattler"],
+["Name a gemstone","diamond,ruby,emerald,sapphire,amethyst,pearl,opal,topaz,jade,garnet,turquoise,aquamarine,onyx,quartz,peridot,citrine,tanzanite,moonstone,lapis lazuli,tourmaline,amber,obsidian,jasper,agate,alexandrite,zircon,coral,spinel,morganite,malachite,bloodstone,tiger's eye/tigers eye,beryl,carnelian,chalcedony,rhodolite,sunstone,labradorite,iolite,kunzite,chrysoberyl,jet,hematite,sodalite,fluorite,rhodochrosite,larimar,benitoite,taaffeite,painite,grandidierite,jeremejevite,musgravite,red beryl/bixbite,poudretteite,demantoid,tsavorite,ammolite,serendibite"],
+["Name an insect","bee,ant,butterfly,fly,mosquito,ladybug/ladybird,beetle,grasshopper,spider,dragonfly,cockroach,moth,wasp,cricket,firefly/lightning bug,caterpillar,termite,flea,praying mantis/mantis,stick insect/walking stick,hornet,bumblebee,cicada,louse/lice,gnat,earwig,locust,aphid,bed bug,silverfish,weevil,tick,stink bug,dung beetle,horsefly,hoverfly,katydid,scarab,firebrat,damselfly,mayfly,lacewing,leafhopper,water strider,stag beetle,boll weevil,mealworm,thrips,whitefly,scale insect,cochineal,assassin bug,antlion,caddisfly,stonefly,dobsonfly,scorpionfly,botfly,tsetse fly,sawfly,springtail,webspinner,booklouse,snakefly"],
+["Name a car brand","toyota,ford,honda,bmw,mercedes/mercedes benz,tesla,chevrolet/chevy,audi,volkswagen/vw,nissan,ferrari,lamborghini,porsche,jeep,hyundai,kia,subaru,mazda,dodge,lexus,volvo,jaguar,land rover/range rover,cadillac,bentley,rolls royce,bugatti,mclaren,maserati,aston martin,mitsubishi,fiat,mini,buick,gmc,chrysler,lincoln,acura,infiniti,peugeot,renault,citroen,alfa romeo,genesis,lotus,skoda,seat,ram,suzuki,rivian,lucid,polestar,koenigsegg,pagani,byd,saab,opel,vauxhall,dacia,lada,tata,mahindra,proton,geely,nio,lancia,datsun,pontiac,saturn,oldsmobile,plymouth,hummer,delorean,trabant,smart,rimac,morgan,tvr,spyker,zagato"],
+["Name a country in Africa","egypt,south africa,nigeria,kenya,morocco,ethiopia,ghana,madagascar,algeria,tanzania,uganda,somalia,sudan,libya,tunisia,zimbabwe,rwanda,senegal,cameroon,angola,congo/democratic republic of the congo/drc,mali,namibia,botswana,mozambique,zambia,ivory coast/cote d'ivoire,niger,chad,liberia,sierra leone,malawi,south sudan,eritrea,mauritania,burkina faso,benin,togo,guinea,gabon,lesotho,eswatini/swaziland,burundi,djibouti,mauritius,seychelles,cape verde/cabo verde,gambia/the gambia,guinea bissau,equatorial guinea,central african republic,comoros,sao tome and principe/sao tome"],
+["Name a country in Asia","china,japan,india,south korea/korea,thailand,vietnam,indonesia,philippines,malaysia,singapore,north korea,pakistan,russia,mongolia,nepal,bangladesh,sri lanka,afghanistan,iran,iraq,saudi arabia,israel,turkey,taiwan,cambodia,laos,myanmar/burma,kazakhstan,bhutan,maldives,uzbekistan,united arab emirates/uae,qatar,jordan,lebanon,syria,kuwait,oman,yemen,bahrain,brunei,timor leste/east timor,kyrgyzstan,tajikistan,turkmenistan,georgia,armenia,azerbaijan,cyprus,palestine"],
+["Name a Shakespeare play","romeo and juliet,hamlet,macbeth,othello,a midsummer night's dream/midsummer nights dream/a midsummer nights dream,king lear,the tempest/tempest,julius caesar,much ado about nothing,the merchant of venice/merchant of venice,twelfth night,the taming of the shrew/taming of the shrew,as you like it,richard iii/richard the third,antony and cleopatra,henry v/henry the fifth,the comedy of errors/comedy of errors,the winter's tale/winters tale/the winters tale,henry iv/henry the fourth,richard ii/richard the second,titus andronicus,coriolanus,measure for measure,all's well that ends well/alls well that ends well,the merry wives of windsor/merry wives of windsor,love's labour's lost/loves labours lost,cymbeline,troilus and cressida,timon of athens,pericles,henry vi/henry the sixth,henry viii/henry the eighth,the two gentlemen of verona/two gentlemen of verona,king john,the two noble kinsmen/two noble kinsmen,edward iii/edward the third"],
+["Name a currency","dollar,euro,pound/pound sterling,yen,peso,rupee,yuan/renminbi,franc,ruble/rouble,bitcoin,won,lira,krona,krone,rand,real,dinar,shekel,dirham,baht,rupiah,ringgit,riyal,zloty,forint,dong,peseta,drachma,mark/deutsche mark,lira,koruna,leu,lev,hryvnia,tenge,naira,cedi,shilling,birr,kwacha,taka,kyat,kip,riel,tugrik,somoni,manat,lari,dram,denar,lempira,quetzal,colon,cordoba,balboa,guarani,boliviano,sol,bolivar,gourde,pula,loti,lilangeni,ouguiya,ariary,dobra,escudo,pa'anga/paanga,tala,vatu,kina,ngultrum,afghani,rufiyaa"],
+["Name a unit of measurement","meter/metre,inch,foot,mile,kilogram,pound,gram,liter/litre,centimeter/centimetre,kilometer/kilometre,ounce,yard,gallon,second,minute,hour,cup,teaspoon,tablespoon,millimeter/millimetre,ton/tonne,pint,quart,degree,celsius,fahrenheit,kelvin,watt,volt,amp/ampere,joule,newton,acre,hectare,calorie,byte,hertz,ohm,pascal,mole,candela,knot,light year,fathom,furlong,league,stone,carat,decibel,lumen,tesla,henry,coulomb,farad,weber,siemens,becquerel,sievert,gray,parsec,angstrom,micron,bushel,peck,cubit,hand,chain,rod,barrel,erg,dyne,mach,torr,dram,grain,smoot,jiffy"]
+];
+const DATA = BANK.map(([q,s])=>{const seen=new Set();const list=[];for(const x of s.split(",")){const al=x.split("/").map(y=>y.trim()).filter(Boolean);if(!al.length||seen.has(al[0]))continue;seen.add(al[0]);list.push(al)}return{q,list}});
+
+// ---------- matching ----------
+function norm(s){return s.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g,"").replace(/&/g,"and").replace(/[^a-z0-9 ]+/g,"").replace(/\s+/g," ").trim().replace(/^(the|a|an) /,"").replace(/ /g,"")}
+const INDEX = DATA.map(p=>{const m=new Map();p.list.forEach((al,i)=>al.forEach(a=>{const k=norm(a);if(k&&!m.has(k))m.set(k,i)}));return m});
+function lev1(a,b){if(Math.abs(a.length-b.length)>1)return false;let i=0,j=0,d=0;while(i<a.length&&j<b.length){if(a[i]===b[j]){i++;j++;continue}if(++d>1)return false;if(a.length>b.length)i++;else if(b.length>a.length)j++;else{i++;j++}}return d+(a.length-i)+(b.length-j)<=1}
+function match(pi,raw){const m=INDEX[pi];const n=norm(raw);if(!n)return -1;
+  const cands=[n];if(n.endsWith("ies"))cands.push(n.slice(0,-3)+"y");if(n.endsWith("es"))cands.push(n.slice(0,-2));if(n.endsWith("s"))cands.push(n.slice(0,-1));
+  for(const c of cands)if(m.has(c))return m.get(c);
+  if(n.length>=6)for(const [k,i] of m)if(k.length>=6&&lev1(n,k))return i;
+  return -1}
+function tierOf(pi,i){if(i<0)return{k:"none",name:"No answer",pts:0};const N=DATA[pi].list.length;
+  if(i===N-1)return{k:"trench",name:"Trench find",pts:100};const p=i/(N-1);
+  if(p>=.75)return{k:"abyss",name:"Abyss",pts:75};if(p>=.5)return{k:"twilight",name:"Twilight",pts:50};if(p>=.25)return{k:"shallows",name:"Shallows",pts:25};return{k:"surface",name:"Surface",pts:10}}
+function score(pi,mine,theirs){const t=tierOf(pi,mine);if(mine>=0&&theirs===mine)return{k:"clash",name:"Collision · half points",pts:Math.floor(t.pts/2)};return t}
+const M_PER_PT=4, ROUNDS=7, ROUND_MS=20000, REVEAL_MS=7000, MAX_M=2800;
+
+// ---------- rng ----------
+function hash(s){let h=2166136261;for(const c of s){h^=c.charCodeAt(0);h=Math.imul(h,16777619)}return h>>>0}
+function rng(seed){let a=seed;return()=>{a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function pickPrompts(seedStr){const r=rng(hash(seedStr));const idx=DATA.map((_,i)=>i);for(let i=idx.length-1;i>0;i--){const j=Math.floor(r()*(i+1));[idx[i],idx[j]]=[idx[j],idx[i]]}return idx.slice(0,ROUNDS)}
+
+// ---------- state ----------
+const $=id=>document.getElementById(id);
+const S={oa:[],mode:null,name:"",code:"",room:null,roomApi:null,g:0,ready:false,prompts:[],r:0,ans:[],phase:"lobby",tEnd:0,tick:null,revealT:null,waitSince:0};
+try{$("inName").value=localStorage.getItem("abyss.name")||""}catch(e){}
+
+function show(scr){for(const s of ["scrLobby","scrRoom","scrGame"])$(s).hidden=s!==scr}
+function showCard(c){for(const s of ["playCard","waitCard","revealCard","finalCard"])$(s).hidden=s!==c}
+function myName(){const n=$("inName").value.trim().slice(0,20)||"Diver";try{localStorage.setItem("abyss.name",n)}catch(e){}return n}
+
+function opp(){if(S.mode!=="duel"||!S.room)return null;const ps=S.room.peers().filter(p=>!p.sameTab&&p.kind==="viewer"&&p.presence&&p.presence.v===1).slice().sort((a,b)=>a.peer<b.peer?-1:1);return ps[0]||null}
+function oppAns(r){const o=opp();if(!o)return undefined;const p=o.presence;if(p.g!==S.g||!Array.isArray(p.ans))return undefined;const a=p.ans[r];if(!a||typeof a!=="object")return undefined;return{i:Number.isInteger(a.i)?a.i:-1,t:String(a.t||"").slice(0,40)}}
+function oppName(){const o=opp();return o?String(o.presence.name||"Friend").slice(0,20):"Friend"}
+function push(){if(!S.room)return;S.room.presence({v:1,name:S.name,g:S.g,ready:S.ready,ans:S.ans.map(a=>({i:a.i,t:a.t.slice(0,40)}))}).catch(()=>{})}
+
+// ---------- lobby ----------
+function newCode(){const L="ABCDEFGHJKMNPQRSTUVWXYZ23456789";let c="";for(let i=0;i<4;i++)c+=L[Math.floor(Math.random()*L.length)];return c}
+function setNet(t){if(S.mode==="duel")$("hdrTag").textContent="Duel "+S.code+" · "+t}
+function inviteLink(){return location.origin+location.pathname+"#"+S.code}
+function makeLink(code,host){
+  const id="abyssduel-"+code.toLowerCase();
+  const L={state:{},opp:null,conn:null,peer:null,fns:[],dead:false,
+    presence(p){Object.assign(this.state,p);this.send();return Promise.resolve()},
+    send(){if(this.conn&&this.conn.open)try{this.conn.send(this.state)}catch(e){}},
+    peers(){return this.opp?[{peer:"opp",sameTab:false,kind:"viewer",presence:this.opp}]:[]},
+    onPeers(fn){this.fns.push(fn)},
+    fire(){for(const f of this.fns)try{f()}catch(e){console.error(e)}},
+    leave(){this.dead=true;clearInterval(this.ka);try{this.peer.destroy()}catch(e){}return Promise.resolve()}};
+  return new Promise((res,rej)=>{
+    let done=false;const ok=()=>{if(!done){done=true;clearTimeout(to);res(L)}};const fail=e=>{if(!done){done=true;clearTimeout(to);L.leave();rej(e)}};
+    const to=setTimeout(()=>fail({type:"timeout"}),15000);
+    const wire=c=>{if(L.conn&&L.conn!==c)try{L.conn.close()}catch(e){}L.conn=c;
+      c.on("open",()=>{if(c!==L.conn)return;L.send();ok();setNet("connected")});
+      c.on("data",d=>{if(c!==L.conn||!d||typeof d!=="object")return;L.opp=Object.freeze({...d});L.fire()});
+      c.on("close",()=>{if(c!==L.conn)return;L.conn=null;L.opp=null;L.fire();if(L.dead)return;setNet("friend disconnected");
+        if(!host)setTimeout(()=>{if(!L.dead&&!L.conn)wire(L.peer.connect(id,{reliable:true}))},2000)});
+      c.on("error",()=>{})};
+    const peer=host?new Peer(id):new Peer();L.peer=peer;
+    peer.on("open",()=>{if(host){peer.on("connection",c=>wire(c));ok();setNet("waiting for friend")}else wire(peer.connect(id,{reliable:true}))});
+    peer.on("disconnected",()=>{if(!L.dead)try{peer.reconnect()}catch(e){}});
+    peer.on("error",e=>{if(!done)fail(e);else if(e.type==="peer-unavailable"&&!host&&!L.dead){setNet("reconnecting…");setTimeout(()=>{if(!L.dead&&!L.conn)wire(peer.connect(id,{reliable:true}))},3000)}});
+    L.ka=setInterval(()=>L.send(),3000);
+  });
+}
+async function enterRoom(code,host,tries=0){
+  if(typeof Peer==="undefined"){$("roomNote").textContent="Couldn't load the connection library. Check your internet and reload.";return}
+  S.name=myName();$("roomNote").textContent=host?"Opening a duel…":"Connecting to your friend…";
+  try{S.room=await makeLink(code,host)}catch(e){
+    if(host&&e&&e.type==="unavailable-id"&&tries<3)return enterRoom(newCode(),true,tries+1);
+    $("roomNote").textContent=!host&&e&&(e.type==="peer-unavailable"||e.type==="timeout")?"No open duel with that code. Check the code, and make sure your friend is still on the duel screen.":"Couldn't connect ("+(e&&e.type||"error")+"). Try again in a moment.";return}
+  $("roomNote").textContent="";S.code=code;S.mode="duel";S.g=0;S.ready=false;S.ans=[];
+  S.room.onPeers(onPeers);
+  push();S.phase="room";$("roomCode").textContent=code;setNet(host?"waiting for friend":"connected");
+  $("roomHelp").textContent=host?"Send your friend this link: "+inviteLink()+" — or have them open the site and enter the code.":"You're in. Press ready when you are.";
+  show("scrRoom");renderRoom();
+}
+$("btnCreate").onclick=()=>enterRoom(newCode(),true);
+$("btnJoin").onclick=()=>{const c=$("inCode").value.trim().toUpperCase();if(!/^[A-Z0-9]{4}$/.test(c)){$("roomNote").textContent="Enter the 4-character code your friend sent you.";$("inCode").focus();return}enterRoom(c,false)};
+{const h=(location.hash||"").slice(1).toUpperCase();if(/^[A-Z0-9]{4}$/.test(h)){$("inCode").value=h;$("roomNote").textContent="You were invited to duel "+h+". Enter your name and press Join.";}}
+$("inCode").addEventListener("keydown",e=>{if(e.key==="Enter")$("btnJoin").click()});
+$("btnSolo").onclick=()=>{S.name=myName();S.mode="solo";S.g=1;startGame(pickPrompts("solo"+Math.random()))};
+$("btnCopy").onclick=()=>{const b=$("btnCopy");navigator.clipboard?.writeText(inviteLink()).then(()=>{b.textContent="Copied"},()=>{b.textContent=S.code}).catch(()=>{});setTimeout(()=>b.textContent="Copy invite link",1500)};
+$("btnLeave").onclick=leave;$("btnExit").onclick=leave;
+function leave(){clearTimers();if(S.room){S.room.leave().catch(()=>{});S.room=null}S.mode=null;S.phase="lobby";$("hdrTag").textContent="Rare answers go deeper";show("scrLobby")}
+
+function renderRoom(){
+  const o=opp();const L=$("playerList");L.textContent="";
+  const add=(name,color,status)=>{const d=document.createElement("div");d.className="pl";const a=document.createElement("span");const dot=document.createElement("span");dot.className="dot";dot.style.background=color;a.append(dot,document.createTextNode(name));const b=document.createElement("span");b.className="tag";b.textContent=status;d.append(a,b);L.append(d)};
+  add(S.name+" (you)","var(--you)",S.ready?"Ready":"Not ready");
+  if(o)add(oppName(),"var(--friend)",o.presence.ready&&o.presence.g>=S.g?"Ready":"Not ready");else add("Waiting for your friend…","var(--line)","—");
+  $("btnReady").textContent=S.ready?"Waiting for friend…":"I'm ready";$("btnReady").disabled=S.ready;
+}
+$("btnReady").onclick=()=>{const o=opp();const og=o&&Number.isInteger(o.presence.g)?o.presence.g:0;S.g=Math.max(S.g+1,og);S.ready=true;S.ans=[];push();renderRoom();maybeStart()};
+
+function onPeers(){if(S.phase==="room")renderRoom();if(S.phase==="final")renderFinalNote();maybeStart();if(S.phase==="wait")checkWait();if(S.phase==="play")renderOppStatus();renderLanes()}
+function maybeStart(){if(S.mode!=="duel"||!S.ready)return;if(S.phase!=="room"&&S.phase!=="final")return;const o=opp();if(!o||!o.presence.ready||o.presence.g!==S.g)return;startGame(pickPrompts(S.code+":"+S.g))}
+
+// ---------- game ----------
+function clearTimers(){clearInterval(S.tick);clearTimeout(S.revealT);S.tick=null;S.revealT=null}
+function startGame(prompts){clearTimers();S.prompts=prompts;S.r=0;S.ans=[];S.oa=[];if(S.mode==="duel")push();
+  $("laneFriend").hidden=S.mode!=="duel";$("laneYouName").textContent=S.name;$("laneFriendName").textContent=oppName();
+  show("scrGame");startRound()}
+function startRound(){S.phase="play";const pi=S.prompts[S.r];$("roundTag").textContent=`Round ${S.r+1} of ${ROUNDS}`;$("promptText").textContent=DATA[pi].q;
+  $("inAns").value="";$("playMsg").textContent="";$("playMsg").className="msg";showCard("playCard");$("inAns").focus();
+  S.tEnd=Date.now()+ROUND_MS;clearInterval(S.tick);S.tick=setInterval(tick,100);tick();renderOppStatus();renderLanes()}
+function tick(){const left=Math.max(0,S.tEnd-Date.now());$("clock").textContent=Math.ceil(left/1000)+"s";$("timerFill").style.width=(left/ROUND_MS*100)+"%";$("timerBar").classList.toggle("low",left<5000);if(left<=0){clearInterval(S.tick);lockIn(-1,"")}}
+$("ansForm").addEventListener("submit",e=>{e.preventDefault();if(S.phase!=="play")return;const raw=$("inAns").value.trim();if(!raw)return;const i=match(S.prompts[S.r],raw);
+  if(i<0){const m=$("playMsg");m.textContent=`“${raw}” isn't on our list. Try another.`;m.className="msg bad";const f=$("ansForm");f.classList.remove("shake");void f.offsetWidth;f.classList.add("shake");$("inAns").select();return}
+  clearInterval(S.tick);lockIn(i,DATA[S.prompts[S.r]].list[i][0])});
+function lockIn(i,t){if(S.phase!=="play")return;S.ans[S.r]={i,t};if(S.mode==="duel"){push();S.phase="wait";S.waitSince=Date.now();$("waitTag").textContent=`Round ${S.r+1} of ${ROUNDS}`;$("waitName").textContent=oppName();$("waitMine").textContent=t||"nothing (time ran out)";$("btnSkipWait").hidden=true;showCard("waitCard");checkWait();S.tick=setInterval(checkWait,1000)}else reveal()}
+function checkWait(){if(S.phase!=="wait")return;if(oppAns(S.r)!==undefined){clearInterval(S.tick);reveal();return}
+  if(Date.now()-S.waitSince>(opp()?ROUND_MS+15000:12000))$("btnSkipWait").hidden=false}
+$("btnSkipWait").onclick=()=>{S.mode="solo";clearInterval(S.tick);$("laneFriend").hidden=true;reveal()};
+
+function oppTotalSoFar(){let t=0;for(let r=0;r<ROUNDS;r++){const o=S.oa[r];const a=S.ans[r];if(!o||!a)continue;t+=score(S.prompts[r],o.i,a.i).pts}return t}
+function myTotalRevealed(){let t=0;const upto=S.phase==="play"?S.r:S.phase==="wait"?S.r:S.r+1;for(let r=0;r<Math.min(upto,S.ans.length);r++){const a=S.ans[r];if(!a)continue;const o=S.oa[r];t+=score(S.prompts[r],a.i,o?o.i:-2).pts}return t}
+function renderLanes(){if($("scrGame").hidden)return;const me=myTotalRevealed()*M_PER_PT;$("depYou").textContent=me+"m";$("barYou").style.width=Math.min(100,me/MAX_M*100)+"%";
+  if(S.mode==="duel"){const th=oppTotalSoFar()*M_PER_PT;$("depFriend").textContent=th+"m";$("barFriend").style.width=Math.min(100,th/MAX_M*100)+"%";$("laneFriendName").textContent=oppName()}}
+function renderOppStatus(){const el=$("oppStatus");if(S.mode!=="duel"){el.textContent="";return}const o=opp();if(!o){el.textContent="Your friend isn't connected right now.";return}const n=Array.isArray(o.presence.ans)&&o.presence.g===S.g?o.presence.ans.length:0;el.textContent=n>S.r?`${oppName()} has locked in.`:`${oppName()} is still thinking.`}
+
+function ansCard(cls,who,a,sc){const d=document.createElement("div");d.className="ans "+cls;const w=document.createElement("span");w.className="tag";w.textContent=who;const t=document.createElement("span");t.className="txt";t.textContent=a&&a.t?a.t:"—";const tr=document.createElement("span");tr.className="tier t-"+sc.k;tr.textContent=sc.name;const p=document.createElement("span");p.className="pts";p.textContent=`+${sc.pts} pts · ${sc.pts*M_PER_PT}m`;d.append(w,t,tr,p);return d}
+function reveal(){S.phase="reveal";const pi=S.prompts[S.r];const a=S.ans[S.r];const o=S.mode==="duel"?oppAns(S.r):undefined;S.oa[S.r]=o;
+  $("revealTag").textContent=`Round ${S.r+1} reveal`;$("revealPrompt").textContent=DATA[pi].q;const box=$("revealAnswers");box.textContent="";
+  box.append(ansCard("you",S.name+" (you)",a,score(pi,a.i,o?o.i:-2)));
+  if(o)box.append(ansCard("friend",oppName(),o,score(pi,o.i,a.i)));
+  box.style.gridTemplateColumns=o?"":"1fr";
+  const L=DATA[pi].list;$("revealHint").textContent=`Most common: ${L.slice(0,3).map(x=>x[0]).join(", ")}. Rarest on the list: ${L[L.length-1][0]}.`;
+  $("btnNext").textContent=S.r+1<ROUNDS?"Next prompt":"See results";showCard("revealCard");renderLanes();
+  const end=Date.now()+REVEAL_MS;clearInterval(S.tick);S.tick=setInterval(()=>{const s=Math.ceil((end-Date.now())/1000);$("nextIn").textContent=s>0?`Continuing in ${s}s`:"";if(s<=0)next()},250)}
+$("btnNext").onclick=next;
+function next(){if(S.phase!=="reveal")return;clearInterval(S.tick);S.r++;if(S.r<ROUNDS)startRound();else finish()}
+
+function finish(){S.phase="final";S.ready=false;if(S.mode==="duel")push();showCard("finalCard");renderLanes();
+  const tb=$("recap");tb.textContent="";const hr=document.createElement("tr");const duel=S.mode==="duel";
+  for(const h of duel?["Prompt","You","",oppName(),""]:["Prompt","You",""]){const th=document.createElement("th");th.textContent=h;hr.append(th)}tb.append(hr);
+  let me=0,them=0;
+  for(let r=0;r<ROUNDS;r++){const pi=S.prompts[r],a=S.ans[r]||{i:-1,t:""},o=S.oa[r];const sa=score(pi,a.i,o?o.i:-2);me+=sa.pts;const tr=document.createElement("tr");
+    const c=(t,cls)=>{const td=document.createElement("td");if(cls)td.className=cls;td.textContent=t;tr.append(td)};
+    c(DATA[pi].q.replace(/^Name (a|an) /,""));c(a.t||"—");c(sa.pts+"","num");
+    if(duel){const so=o?score(pi,o.i,a.i):{pts:0};them+=so.pts;c(o&&o.t?o.t:"—");c(so.pts+"","num")}tb.append(tr)}
+  const mm=me*M_PER_PT,tm=them*M_PER_PT;
+  $("finalHead").textContent=duel?(mm>tm?`You win, ${mm}m to ${tm}m.`:mm<tm?`${oppName()} wins, ${tm}m to ${mm}m.`:`Dead heat at ${mm}m.`):`You reached ${mm}m.`;
+  $("btnAgain").textContent=duel?"Rematch":"Dive again";renderFinalNote()}
+function renderFinalNote(){if(S.mode!=="duel"){$("againNote").textContent="";return}const o=opp();$("againNote").textContent=!o?"Your friend has left the room.":(o.presence.ready&&o.presence.g>S.g)?`${oppName()} wants a rematch.`:S.ready?`Waiting for ${oppName()} to press Rematch.`:""}
+$("btnAgain").onclick=()=>{if(S.mode==="duel"){const o=opp();const og=o&&Number.isInteger(o.presence.g)?o.presence.g:0;S.g=Math.max(S.g+1,og);S.ready=true;S.ans=[];push();$("btnAgain").disabled=true;renderFinalNote();setTimeout(()=>$("btnAgain").disabled=false,800);maybeStart()}else startGame(pickPrompts("solo"+Math.random()))};
+</script>
+
+</body>
+</html>
